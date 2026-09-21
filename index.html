@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>센서 데이터 통계분석 대시보드 | In-Memory Analytics</title>
+
+  <!-- 외부 라이브러리 CDN: 초기 로딩 완료 -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+
+  <!-- 스타일시트 -->
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- 통계 및 데이터 처리 스크립트 -->
+  <script src="js/statistics.js"></script>
+  <script src="js/data-store.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+
+  <!-- 헤더 영역 -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-area">
+        <div class="brand-icon">⚡</div>
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <h1 class="brand-title">센서 데이터 통계분석 대시보드</h1>
+            <span class="brand-tag">v1.0 Pro</span>
+          </div>
+          <p style="font-size: 0.76rem; color: var(--text-secondary);">인메모리 원클릭 통계 분석 & 실시간 인터랙티브 시각화 시스템</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="security-badge" title="데이터가 외부 서버로 전송되지 않고 브라우저 메모리 내부에서만 처리됩니다.">
+          <span>🔒</span>
+          <span>클라이언트 메모리 격리 (외부 유출 방지)</span>
+        </div>
+        <button id="themeToggleBtn" class="btn btn-secondary btn-sm" title="다크/라이트 테마 전환">
+          <span id="themeIcon">🌙</span> <span id="themeText">다크 모드</span>
+        </button>
+        <button id="printReportBtn" class="btn btn-secondary btn-sm" title="현재 분석 화면 인쇄 또는 PDF 저장">
+          <span>🖨️</span> <span>리포트 출력</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 메인 래퍼 -->
+  <main class="main-wrapper">
+
+    <!-- 1. 데이터셋 상태 & 파일 제어 바 -->
+    <section class="data-bar">
+      <div class="dataset-meta">
+        <div class="file-status-pill">
+          <span style="color: var(--accent-emerald);">●</span>
+          <span id="datasetNameText">센서_측정_더미데이터_100건.xlsx (기본 데이터)</span>
+        </div>
+        <div class="meta-tags">
+          <span class="tag-badge" id="rowCountBadge">100 행</span>
+          <span class="tag-badge" id="colCountBadge">7 컬럼</span>
+          <span class="tag-badge" id="filterStatusBadge">필터: 없음</span>
+        </div>
+      </div>
+
+      <div class="data-controls">
+        <button id="openUploadModalBtn" class="btn btn-primary btn-sm">
+          <span>📂</span> <span>다른 엑셀/CSV 업로드</span>
+        </button>
+        <button id="resetDefaultDataBtn" class="btn btn-secondary btn-sm" title="초기 센서 더미데이터로 복원">
+          <span>🔄</span> <span>기본 데이터 복원</span>
+        </button>
+        <button id="exportCsvBtn" class="btn btn-secondary btn-sm" title="현재 메모리 데이터를 CSV로 다운로드">
+          <span>💾</span> <span>CSV 내보내기</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 2. 원클릭 통계분석 프리셋 툴바 -->
+    <section class="preset-bar">
+      <div class="preset-title-wrap">
+        <h3>⚡ 원클릭 통계분석 프리셋 (One-Click Analysis)</h3>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">클릭 시 최적화된 통계 기법과 차트가 즉각 설정됩니다.</span>
+      </div>
+
+      <div class="preset-grid">
+        <button class="preset-btn active" data-preset="calibration">
+          <div class="preset-btn-top">
+            <span>🎯</span>
+            <span>센서 캘리브레이션</span>
+          </div>
+          <div class="preset-btn-desc">원시값 vs 참값 OLS 회귀, R², 잔차도 분석</div>
+        </button>
+
+        <button class="preset-btn" data-preset="spc">
+          <div class="preset-btn-top">
+            <span>📈</span>
+            <span>공정 SPC 관리도</span>
+          </div>
+          <div class="preset-btn-desc">Shewhart I-MR 관리한계선(±3σ) 및 런 이상 감지</div>
+        </button>
+
+        <button class="preset-btn" data-preset="outliers">
+          <div class="preset-btn-top">
+            <span>🔍</span>
+            <span>진동/압력 이상치 탐지</span>
+          </div>
+          <div class="preset-btn-desc">Tukey IQR & Z-score 기반 실시간 이상치 판별</div>
+        </button>
+
+        <button class="preset-btn" data-preset="correlation">
+          <div class="preset-btn-top">
+            <span>📊</span>
+            <span>다변량 상관분석</span>
+          </div>
+          <div class="preset-btn-desc">전 변수 피어슨 & 스피어만 상관계수 히트맵</div>
+        </button>
+
+        <button class="preset-btn" data-preset="timeseries">
+          <div class="preset-btn-top">
+            <span>⏱️</span>
+            <span>시계열 평활화</span>
+          </div>
+          <div class="preset-btn-desc">센서 주기 신호 SMA & EMA 이동평균 노이즈 필터</div>
+        </button>
+      </div>
+    </section>
+
+    <!-- 3. KPI 통계 요약 카드 -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-title">총 데이터 수</div>
+        <div class="kpi-value" id="kpiTotalRows">100</div>
+        <div class="kpi-sub">5분 주기 센서 측정치</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">평균 온도 (참값)</div>
+        <div class="kpi-value" id="kpiTempMean">25.13 ℃</div>
+        <div class="kpi-sub" id="kpiTempRange">범위: 24.06 ~ 26.01</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">평균 진동 RMS</div>
+        <div class="kpi-value" id="kpiVibMean">1.92 mm/s</div>
+        <div class="kpi-sub" id="kpiVibMax">최대: 3.74 mm/s</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">평균 압력</div>
+        <div class="kpi-value" id="kpiPressMean">102.13 kPa</div>
+        <div class="kpi-sub" id="kpiPressStd">표준편차: ±0.21 kPa</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">캘리브레이션 결정계수 (R²)</div>
+        <div class="kpi-value" id="kpiR2">0.5035</div>
+        <div class="kpi-sub">상관계수 r = 0.7096</div>
+      </div>
+    </section>
+
+    <!-- 4. 통계 기법별 탭 내비게이션 -->
+    <nav class="tabs-nav">
+      <button class="tab-btn active" data-tab="tab-regression"><span>🎯</span> <span>회귀분석 & 캘리브레이션</span></button>
+      <button class="tab-btn" data-tab="tab-spc"><span>📈</span> <span>시계열 & SPC 공정관리도</span></button>
+      <button class="tab-btn" data-tab="tab-descriptive"><span>📊</span> <span>기술통계 & 분포</span></button>
+      <button class="tab-btn" data-tab="tab-correlation"><span>🔗</span> <span>상관분석 & 행렬</span></button>
+      <button class="tab-btn" data-tab="tab-outliers"><span>🚨</span> <span>이상치 감지 및 필터</span></button>
+      <button class="tab-btn" data-tab="tab-testing"><span>🧪</span> <span>가설검정 & Q-Q 플롯</span></button>
+      <button class="tab-btn" data-tab="tab-rawdata"><span>📋</span> <span>원시 데이터 뷰어</span></button>
+    </nav>
+
+    <!-- 5. 탭별 작업 공간 -->
+
+    <!-- TAB 1: 회귀분석 & 캘리브레이션 -->
+    <div id="tab-regression" class="tab-content active">
+      <div class="workspace-row">
+        <aside class="controls-card">
+          <h4>회귀분석 파라미터</h4>
+          <div class="control-group">
+            <label for="regVarX">독립변수 (X - 원시값/입력):</label>
+            <select id="regVarX" class="form-select"></select>
+          </div>
+          <div class="control-group">
+            <label for="regVarY">종속변수 (Y - 참값/출력):</label>
+            <select id="regVarY" class="form-select"></select>
+          </div>
+          <div class="control-group">
+            <label>분석 옵션:</label>
+            <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" id="regShowCi" checked> 95% 신뢰구간(CI) 밴드 표시
+            </label>
+          </div>
+          <button id="runRegBtn" class="btn btn-primary"><span>적용 및 재계산</span></button>
+        </aside>
+
+        <div class="viz-panel">
+          <div class="chart-card">
+            <div id="regMainChart" class="chart-container"></div>
+          </div>
+
+          <div class="stats-table-card">
+            <div class="table-title-bar">
+              <h4>선형 회귀분석 통계량 (OLS Statistics)</h4>
+              <span class="tag-badge" id="regEquationBadge">Y = β1·X + β0</span>
+            </div>
+            <table class="stats-table" id="regStatsTable">
+              <thead>
+                <tr>
+                  <th>항목</th>
+                  <th>계수 (Estimate)</th>
+                  <th>표준오차 (SE)</th>
+                  <th>t-통계량</th>
+                  <th>p-value</th>
+                  <th>95% 신뢰구간</th>
+                </tr>
+              </thead>
+              <tbody id="regTableBody"></tbody>
+            </table>
+          </div>
+
+          <!-- 잔차도 & 등분산성 진단 -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="chart-card" style="min-height: 380px;">
+              <div id="regResidualChart" style="width: 100%; height: 350px;"></div>
+            </div>
+            <div class="chart-card" style="min-height: 380px;">
+              <div id="regResidualQQChart" style="width: 100%; height: 350px;"></div>
+            </div>
+          </div>
+
+          <div class="insight-callout" id="regInsightBox">
+            <!-- 회귀분석 인사이트 -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: 시계열 & SPC 공정관리도 -->
+    <div id="tab-spc" class="tab-content">
+      <div class="workspace-row">
+        <aside class="controls-card">
+          <h4>공정 관리 파라미터</h4>
+          <div class="control-group">
+            <label for="spcVar">분석 대상 센서 변수:</label>
+            <select id="spcVar" class="form-select"></select>
+          </div>
+          <div class="control-group">
+            <label for="spcSmaWindow">이동평균(SMA) 윈도우 크기:</label>
+            <input type="number" id="spcSmaWindow" class="form-input" value="5" min="2" max="30">
+          </div>
+          <div class="control-group">
+            <label for="spcEmaAlpha">지수평활(EMA) 계수 (α):</label>
+            <input type="number" id="spcEmaAlpha" class="form-input" value="0.25" min="0.05" max="0.95" step="0.05">
+          </div>
+          <div class="control-group">
+            <label>표시 모드:</label>
+            <select id="spcDisplayMode" class="form-select">
+              <option value="both">관리도 + 이동평균 모두 보기</option>
+              <option value="spc">SPC 관리도(UCL/LCL) 전용</option>
+              <option value="smoothing">시계열 평활화(SMA/EMA) 전용</option>
+            </select>
+          </div>
+          <button id="runSpcBtn" class="btn btn-primary"><span>관리도 업데이트</span></button>
+        </aside>
+
+        <div class="viz-panel">
+          <div class="chart-card">
+            <div id="spcChartMain" class="chart-container"></div>
+          </div>
+
+          <div class="stats-table-card">
+            <div class="table-title-bar">
+              <h4>SPC 관리한계 지표 및 공정 이탈 감지 내역</h4>
+            </div>
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th>지표</th>
+                  <th>중심선 (CL)</th>
+                  <th>관리상한선 (UCL)</th>
+                  <th>관리하한선 (LCL)</th>
+                  <th>추정 표준편차 (σ̂)</th>
+                  <th>관리 이탈 건수</th>
+                </tr>
+              </thead>
+              <tbody id="spcTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="insight-callout" id="spcInsightBox">
+            <!-- SPC 인사이트 -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: 기술통계 & 분포 -->
+    <div id="tab-descriptive" class="tab-content">
+      <div class="workspace-row">
+        <aside class="controls-card">
+          <h4>변수 선택</h4>
+          <div class="control-group">
+            <label for="descTargetVar">분포 분석 변수:</label>
+            <select id="descTargetVar" class="form-select"></select>
+          </div>
+          <div class="control-group">
+            <label for="descPlotType">다변량 비교 플롯:</label>
+            <select id="descPlotType" class="form-select">
+              <option value="box">박스 플롯 (Box Plot)</option>
+              <option value="violin">바이올린 플롯 (Violin Plot)</option>
+            </select>
+          </div>
+          <button id="runDescBtn" class="btn btn-primary"><span>분석 갱신</span></button>
+        </aside>
+
+        <div class="viz-panel">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="chart-card">
+              <div id="descHistChart" class="chart-container"></div>
+            </div>
+            <div class="chart-card">
+              <div id="descBoxChart" class="chart-container"></div>
+            </div>
+          </div>
+
+          <div class="stats-table-card">
+            <div class="table-title-bar">
+              <h4>전체 수치 변수 기술통계 요약표 (Descriptive Statistics Summary)</h4>
+            </div>
+            <table class="stats-table" id="descSummaryTable">
+              <thead>
+                <tr>
+                  <th>변수명</th>
+                  <th>표본수(N)</th>
+                  <th>평균</th>
+                  <th>표준편차</th>
+                  <th>중위수</th>
+                  <th>최소값</th>
+                  <th>최대값</th>
+                  <th>IQR</th>
+                  <th>왜도(Skewness)</th>
+                  <th>첨도(Kurtosis)</th>
+                </tr>
+              </thead>
+              <tbody id="descTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="insight-callout" id="descInsightBox"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: 상관분석 & 행렬 -->
+    <div id="tab-correlation" class="tab-content">
+      <div class="workspace-row">
+        <aside class="controls-card">
+          <h4>상관분석 설정</h4>
+          <div class="control-group">
+            <label for="corrMethod">상관계수 종류:</label>
+            <select id="corrMethod" class="form-select">
+              <option value="pearson">피어슨 상관계수 (Pearson r - 선형)</option>
+              <option value="spearman">스피어만 순위상관계수 (Spearman ρ - 단조)</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="corrPairX">산점도 X 변수:</label>
+            <select id="corrPairX" class="form-select"></select>
+          </div>
+          <div class="control-group">
+            <label for="corrPairY">산점도 Y 변수:</label>
+            <select id="corrPairY" class="form-select"></select>
+          </div>
+          <button id="runCorrBtn" class="btn btn-primary"><span>상관행렬 계산</span></button>
+        </aside>
+
+        <div class="viz-panel">
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px;">
+            <div class="chart-card">
+              <div id="corrHeatmapChart" class="chart-container"></div>
+            </div>
+            <div class="chart-card">
+              <div id="corrScatterChart" class="chart-container"></div>
+            </div>
+          </div>
+
+          <div class="stats-table-card">
+            <div class="table-title-bar">
+              <h4>상관관계 랭킹 (강한 양/음의 상관 순위)</h4>
+            </div>
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th>변수 쌍 (Pair)</th>
+                  <th>상관계수</th>
+                  <th>결정계수 (r²)</th>
+                  <th>유의확률 (p-value)</th>
+                  <th>관계 해석</th>
+                </tr>
+              </thead>
+              <tbody id="corrRankingTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="insight-callout" id="corrInsightBox"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: 이상치 탐지 및 필터 -->
+    <div id="tab-outliers" class="tab-content">
+      <div class="workspace-row">
+        <aside class="controls-card">
+          <h4>이상치 탐지 알고리즘</h4>
+          <div class="control-group">
+            <label for="outlierVar">분석 대상 변수:</label>
+            <select id="outlierVar" class="form-select"></select>
+          </div>
+          <div class="control-group">
+            <label for="outlierMethod">탐지 기법:</label>
+            <select id="outlierMethod" class="form-select">
+              <option value="iqr">Tukey's IQR (사분위수 범위)</option>
+              <option value="zscore">Z-Score (표준화 점수)</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="outlierThresh" id="outlierThreshLabel">IQR 배수 (k = 1.5 권장):</label>
+            <input type="number" id="outlierThresh" class="form-input" value="1.5" step="0.1" min="0.5" max="5.0">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <button id="runOutlierBtn" class="btn btn-primary"><span>이상치 스캔</span></button>
+            <button id="filterOutliersBtn" class="btn btn-secondary"><span>이상치 행 필터링(제외)</span></button>
+            <button id="clearFilterBtn" class="btn btn-secondary btn-sm"><span>필터 해제 (전체 복원)</span></button>
+          </div>
+        </aside>
+
+        <div class="viz-panel">
+          <div class="chart-card">
+            <div id="outlierChartCanvas" class="chart-container"></div>
+          </div>
+
+          <div class="stats-table-card">
+            <div class="table-title-bar">
+              <h4>탐지된 이상치 목록 (Outlier Records)</h4>
+              <span class="tag-badge" id="outlierCountBadge">0건 탐지됨</span>
+            </div>
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th>행 번호</th>
+                  <th>측정시각</th>
+                  <th>측정값</th>
+                  <th>기준 임계치</th>
+                  <th>이탈 정도 (Score)</th>
+                  <th>구분</th>
+                </tr>
+              </thead>
+              <tbody id="outlierTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="insight-callout" id="outlierInsightBox"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 6: 가설검정 & Q-Q 플롯 -->
+    <div id="tab-testing" class="tab-content">
+      <div class="workspace-row">
+        <aside class="controls-card">
+          <h4>가설검정 설정</h4>
+          <div class="control-group">
+            <label for="testType">검정 기법 선택:</label>
+            <select id="testType" class="form-select">
+              <option value="one-sample">단일표본 t-검정 (One-sample t-test)</option>
+              <option value="two-sample">독립 2표본 t-검정 (Two-sample t-test)</option>
+              <option value="normality">정규성 검정 (Normality Diagnostic)</option>
+            </select>
+          </div>
+          <div class="control-group" id="testVar1Group">
+            <label for="testVar1">검정 변수 1:</label>
+            <select id="testVar1" class="form-select"></select>
+          </div>
+          <div class="control-group" id="testVar2Group" style="display: none;">
+            <label for="testVar2">검정 변수 2:</label>
+            <select id="testVar2" class="form-select"></select>
+          </div>
+          <div class="control-group" id="testMu0Group">
+            <label for="testMu0">귀무가설 기준값 (μ₀):</label>
+            <input type="number" id="testMu0" class="form-input" value="25.0" step="0.1">
+          </div>
+          <button id="runTestBtn" class="btn btn-primary"><span>가설검정 실행</span></button>
+        </aside>
+
+        <div class="viz-panel">
+          <div class="chart-card">
+            <div id="testChartCanvas" class="chart-container"></div>
+          </div>
+
+          <div class="stats-table-card">
+            <div class="table-title-bar">
+              <h4 id="testResultTitle">통계적 가설검정 결과</h4>
+            </div>
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th>검정 통계량</th>
+                  <th>수치</th>
+                  <th>자유도 (df)</th>
+                  <th>유의확률 (p-value)</th>
+                  <th>판정 (α = 0.05)</th>
+                </tr>
+              </thead>
+              <tbody id="testTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="insight-callout" id="testInsightBox"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 7: 원시 데이터 뷰어 -->
+    <div id="tab-rawdata" class="tab-content">
+      <div class="stats-table-card">
+        <div class="table-title-bar">
+          <div>
+            <h4>현재 메모리 데이터 테이블 (인메모리 원시 뷰어)</h4>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">정렬 및 검색 지원 (외부 전송 없이 로컬에서만 렌더링)</span>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <input type="text" id="rawSearchInput" class="form-input" placeholder="검색어 입력..." style="width: 200px;">
+            <span class="tag-badge" id="rawTableRowsBadge">100 행</span>
+          </div>
+        </div>
+        <div style="max-height: 550px; overflow-y: auto;">
+          <table class="stats-table" id="rawDataTable">
+            <thead id="rawDataTableHead"></thead>
+            <tbody id="rawDataTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 파일 업로드 모달 -->
+  <div class="modal-backdrop" id="uploadModal">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="font-size: 1.1rem; font-weight: 700;">📂 엑셀 / CSV 파일 불러오기</h3>
+        <button id="closeModalBtn" class="btn btn-secondary btn-sm" style="border: none; font-size: 1.2rem;">✕</button>
+      </div>
+      <p style="font-size: 0.84rem; color: var(--text-secondary);">
+        .xlsx, .xls, .csv 파일을 선택하거나 드래그앤드롭하세요. 파일은 서버로 전송되지 않고 브라우저 메모리 내부에서만 파싱됩니다.
+      </p>
+
+      <div class="dropzone" id="fileDropzone">
+        <div class="dropzone-icon">📊</div>
+        <p style="font-weight: 600; margin-bottom: 4px;">엑셀 또는 CSV 파일을 이곳에 드래그하세요</p>
+        <p style="font-size: 0.8rem; color: var(--text-muted);">또는 아래 버튼을 눌러 파일 탐색기에서 선택</p>
+        <input type="file" id="fileInputElement" accept=".xlsx,.xls,.csv" style="display: none;">
+        <button id="browseFileBtn" class="btn btn-primary btn-sm" style="margin-top: 14px;">파일 선택</button>
+      </div>
+
+      <div id="uploadErrorBox" class="insight-callout danger" style="display: none; font-size: 0.82rem;"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <button id="cancelModalBtn" class="btn btn-secondary">취소</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
